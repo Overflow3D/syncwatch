@@ -69,7 +69,7 @@ func createRoom(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 }
 
-//login creates cookie if password matches
+//login if password matches
 func login(w http.ResponseWriter, r *http.Request) {
 	roomS := r.Context().Value("room").(*room.Room)
 	req := &Req{}
