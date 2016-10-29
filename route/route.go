@@ -63,6 +63,8 @@ func DoRoutes() http.Handler {
 
 //Router to Handler
 func toHandler(r *httprouter.Router) http.Handler {
+	// Cors for cross-origin resources sharing needed
+	// In dev phase ng2 :3000 port and api 8080
 	return http.Handler(cors.Default().Handler(r))
 }
 
