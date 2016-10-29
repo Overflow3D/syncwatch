@@ -2,7 +2,7 @@ package route
 
 import (
 	"encoding/json"
-	"html/template"
+	"fmt"
 	"net/http"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,23 +13,17 @@ import (
 )
 
 func index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	croom := template.Must(template.ParseFiles("templates/index.html"))
-
-	croom.Execute(w, nil)
 }
 
+//TODO change roomPage get http response to json response
 func roomPage(w http.ResponseWriter, r *http.Request) {
-	home := template.Must(template.ParseFiles("templates/room.html"))
 	room := r.Context().Value("room").(*room.Room)
 	ctx := map[string]interface{}{
 		"Room":  room,
 		"Page":  "room",
 		"Title": "Join #" + room.ID,
 	}
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	home.Execute(w, ctx)
+	fmt.Fprint(w, ctx)
 }
 
 //Req request struct
