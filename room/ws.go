@@ -50,7 +50,7 @@ func (p *Peer) Listen() {
 		}
 		//Add incoming messages to send queue, raw for now
 		p.sendQueue <- m
-		log.Println("Message to websoecket", m)
+		log.Println("Message to websoecket", string(m))
 	}
 }
 
@@ -70,16 +70,15 @@ func (p *Peer) Talk() {
 		case m, k := <-p.sendQueue:
 			if !k {
 				p.write(websocket.CloseMessage, []byte(""))
-				break
+				return
 			}
-			log.Println("I should see it now")
 			if err := p.write(websocket.TextMessage, m); err != nil {
-				break
+				return
 			}
 		//case ping send ping
 		case <-ping.C:
 			if err := p.write(websocket.PingMessage, []byte("")); err != nil {
-				break
+				return
 			}
 		}
 
@@ -121,6 +120,7 @@ func (p *Peer) preMessages(msg []byte) {
 
 //Write writes to peer
 func (p *Peer) write(mType int, payload []byte) error {
+	log.Println(payload) // for debugging
 	p.ws.SetWriteDeadline(time.Now().Add(time.Duration(3 * time.Second)))
 	return p.ws.WriteMessage(mType, payload)
 }

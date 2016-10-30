@@ -1,6 +1,7 @@
 package room
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 )
@@ -63,7 +64,7 @@ func addRoomToMemory(id string, p []byte) {
 		register:       make(chan *Peer),
 		unregister:     make(chan *Peer),
 		stop:           make(chan int),
-		counter:        1,
+		counter:        0,
 	}
 
 }
@@ -89,30 +90,45 @@ loop:
 	for {
 		select {
 		case peer, ok := <-r.register:
+			log.Println("test")
 			if ok {
-				log.Println("Peer registered")
 				r.peers[peer] = true
+
+				//We need to start it in new gorouting so select statment doesn't get blocked
+				//Otherwise it get stuck beacuse of we are still in case <-r.register, while
+				//case <-r.broadcast need to be done to leave <-r.register
+				go r.broadcast(r.doUserList(peer, true)) // notify websocket about user joining
+				log.Println("User: ", peer.name, " joins ", r.ID, " room.")
+
 			} else {
 				break loop
 			}
 		case peer, ok := <-r.unregister:
 			{
 				if ok {
+
 					r.unRegisterPeer(peer)
+					//We need to start it in new gorouting so select statment doesn't get blocked
+					//Otherwise it get stuck beacuse of we are still in case <-r.unregister, while
+					//case <-r.broadcast need to be done to leave <-r.unregister
+					go r.broadcast(r.doUserList(peer, false)) // notify websocket about user leaving
+					log.Println("User: ", peer.name, " leaves ", r.ID, " room.")
 				}
 			}
 
+		//Emits message to all users in room
 		case m, ok := <-r.broadcastQueue:
 			if ok {
-				log.Println("Message", string(m))
 				for peer := range r.peers {
-					log.Println(peer.id)
 					select {
 					case peer.sendQueue <- m:
-						log.Println("Message sended to: ", peer.id)
+					default:
+						close(peer.sendQueue)
+						delete(r.peers, peer)
 					}
 				}
 			}
+		//Deletes room after 30min of inactivity with out any user in it
 		case <-time.After(time.Second * 1800):
 			if len(r.peers) == 0 {
 				break loop
@@ -132,11 +148,13 @@ func (r *Room) RegisterPeer(p *Peer) {
 
 func (r *Room) addPeer() {
 	r.counter++
+	log.Println(r.counter)
 }
 
 //unRegisterPeer unregisters peer from room
 func (r *Room) unRegisterPeer(p *Peer) {
 	delete(r.peers, p)
+	r.counter--
 	log.Println("Unregistered from room:", p.name, p.id)
 }
 
@@ -146,15 +164,60 @@ func (r *Room) GetRoomPeers() int {
 }
 
 func (r *Room) broadcast(payload []byte) {
-	if len(r.peers) == 0 {
-		return
+	if len(r.peers) > 0 {
+		r.broadcastQueue <- payload
 	}
-
-	r.broadcastQueue <- payload
 
 }
 
+//doUserList, creates action for websocket with userList and userUpdate status
+func (r *Room) doUserList(p *Peer, joining bool) []byte {
+	var peerUpdate interface{}
+	//Check if peer has information
+	if p != nil {
+		peerUpdate = struct {
+			Peer      string `json:"peer"`
+			Name      string `json:"name"`
+			IsJoining bool   `json:"joining"`
+			Time      int64  `json:"time"`
+		}{
+
+			p.id,
+			p.name,
+			joining,
+			time.Now().UTC().Unix(),
+		}
+
+	}
+
+	peersInfo := struct {
+		Action   string            `json:"action"`
+		Message  map[string]string `json:"userList"`
+		PeerInfo interface{}       `json:"userInfo"`
+	}{
+		"userUpdate",
+		r.userList(),
+		peerUpdate,
+	}
+
+	return marshalContent(peersInfo)
+}
+
+//userList, retrives userList of specific room
 func (r *Room) userList() map[string]string {
 	list := make(map[string]string)
+
+	for user := range r.peers {
+		list[user.id] = user.name
+	}
+
 	return list
+}
+
+//marshalContent, marshals interface content into []byte so websocket can handle the message
+func marshalContent(content interface{}) []byte {
+	if encoded, err := json.Marshal(content); err == nil {
+		return encoded
+	}
+	return []byte("")
 }
