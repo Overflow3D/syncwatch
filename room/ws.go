@@ -49,6 +49,7 @@ func (p *Peer) Listen() {
 			break
 		}
 		//Send message with peer info and do action with it before sending it back to all users
+
 		p.preMessages(m)
 
 	}
@@ -87,49 +88,49 @@ func (p *Peer) Talk() {
 
 func (p *Peer) preMessages(msg []byte) {
 	data := struct {
-		Action string `json:"action"`
-		Link   string `json:"link,omitempty"`
-		Msg    string `json:"msg,omitempty"`
+		Action   string `json:"action"`
+		UserInfo struct {
+			Name string `json:"name"`
+			Msg  string `json:"msg,omitempty"`
+			Link string `json:"link,omitempty"`
+		} `json:"userInfo"`
 	}{}
+
+	// data := &WsMessage{UserInfo: &UserInfo{}}
 
 	err := json.Unmarshal(msg, &data)
 	if err != nil {
 		return
 	}
-
+	log.Println(data.UserInfo)
 	switch data.Action {
 	case "newVideo":
-
+		log.Println(data.UserInfo.Link)
 		//Send contex of message to all users of the room
 		if room, exists := rooms[p.roomID]; exists {
 			ctx := struct {
-				Action string `json:"action"`
-				User   string `json:"user"`
-				Link   string `json:"link"`
+				Action   string      `json:"action"`
+				UserInfo interface{} `json:"userInfo"`
 			}{
 				data.Action,
-				p.name,
-				data.Link,
+				data.UserInfo,
 			}
 
 			room.broadcast(marshalContent(ctx))
 		}
 
 	case "msg":
-		if len(data.Msg) == 0 {
+		if len(data.UserInfo.Msg) == 0 {
 			return
 		}
 		if room, exists := rooms[p.roomID]; exists {
 			ctx := struct {
-				Action string `json:"action"`
-				User   string `json:"user"`
-				Msg    string `json:"msg"`
+				Action   string      `json:"action"`
+				UserInfo interface{} `json:"userInfo"`
 			}{
 				data.Action,
-				p.name,
-				data.Msg,
+				data.UserInfo,
 			}
-
 			room.broadcast(marshalContent(ctx))
 		}
 
