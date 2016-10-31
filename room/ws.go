@@ -96,8 +96,6 @@ func (p *Peer) preMessages(msg []byte) {
 		} `json:"userInfo"`
 	}{}
 
-	// data := &WsMessage{UserInfo: &UserInfo{}}
-
 	err := json.Unmarshal(msg, &data)
 	if err != nil {
 		return
