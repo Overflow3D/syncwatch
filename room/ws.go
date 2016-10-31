@@ -48,9 +48,9 @@ func (p *Peer) Listen() {
 		if e != nil {
 			break
 		}
-		//Add incoming messages to send queue, raw for now
-		p.sendQueue <- m
-		log.Println("Message to websoecket", string(m))
+		//Send message with peer info and do action with it before sending it back to all users
+		p.preMessages(m)
+
 	}
 }
 
@@ -87,8 +87,9 @@ func (p *Peer) Talk() {
 
 func (p *Peer) preMessages(msg []byte) {
 	data := struct {
-		Action  string `json:"action"`
-		Message string `json:"message"`
+		Action string `json:"action"`
+		Link   string `json:"link,omitempty"`
+		Msg    string `json:"msg,omitempty"`
 	}{}
 
 	err := json.Unmarshal(msg, &data)
@@ -97,30 +98,50 @@ func (p *Peer) preMessages(msg []byte) {
 	}
 
 	switch data.Action {
-	case "msg":
-		if len(data.Message) == 0 {
-			return
+	case "newVideo":
+
+		//Send contex of message to all users of the room
+		if room, exists := rooms[p.roomID]; exists {
+			ctx := struct {
+				Action string `json:"action"`
+				User   string `json:"user"`
+				Link   string `json:"link"`
+			}{
+				data.Action,
+				p.name,
+				data.Link,
+			}
+
+			room.broadcast(marshalContent(ctx))
 		}
 
-		// if room, exists := rooms[p.roomID]; exists {
-		// 	ctx := struct {
-		// 		Action  string `json:"action"`
-		// 		Peer    string `json:"peer"`
-		// 		Message string `json:"msg"`
-		// 	}{
-		// 		data.Action,
-		// 		p.id,
-		// 		data.Message,
-		// 	}
-		//
-		// }
+	case "msg":
+		if len(data.Msg) == 0 {
+			return
+		}
+		if room, exists := rooms[p.roomID]; exists {
+			ctx := struct {
+				Action string `json:"action"`
+				User   string `json:"user"`
+				Msg    string `json:"msg"`
+			}{
+				data.Action,
+				p.name,
+				data.Msg,
+			}
+
+			room.broadcast(marshalContent(ctx))
+		}
 
 	}
 }
 
 //Write writes to peer
 func (p *Peer) write(mType int, payload []byte) error {
-	log.Println(payload) // for debugging
+	if len(payload) != 0 {
+		log.Println("Payload:", payload) // for debugging
+	}
+
 	p.ws.SetWriteDeadline(time.Now().Add(time.Duration(3 * time.Second)))
 	return p.ws.WriteMessage(mType, payload)
 }
